@@ -7,6 +7,7 @@ import com.app.download.db.DownloadEntityDao;
 import com.app.download.file.FileStorageManager;
 import com.app.download.http.DownloadCallback;
 import com.app.download.http.HttpManager;
+import com.app.download.utils.Logger;
 
 import java.io.File;
 import java.util.HashSet;
@@ -81,15 +82,15 @@ public class DownloadManager {
             FileStorageManager.deleteFileByName(context, url);//In case a file with the same name exists
             processDownload(context, url, mLength, callback);
         } else {
-//            for (int i = 0; i < mCache.size(); i++) {
-//                DownloadEntity entity = mCache.get(i);
-//                if (i == mCache.size() - 1) {
-//                    mLength = entity.getEnd_position() + 1;
-//                }
-//                long startSize = entity.getStart_position() + entity.getProgress_position();
-//                long endSize = entity.getEnd_position();
-//                sThreadPool.execute(new DownloadRunnable(context, startSize, endSize, url, callback, entity));
-//            }
+            for (int i = 0; i < mCache.size(); i++) {
+                DownloadEntity entity = mCache.get(i);
+                if (i == mCache.size() - 1) {
+                    mLength = entity.getEnd_position() + 1;
+                }
+                long startSize = entity.getStart_position() + entity.getProgress_position();
+                long endSize = entity.getEnd_position();
+                sThreadPool.execute(new DownloadRunnable(context, startSize, endSize, url, callback, entity));
+            }
         }
 
         sLocalProgressPool.execute(new Runnable() {
@@ -100,8 +101,9 @@ public class DownloadManager {
                         Thread.sleep(200);
                         File file = FileStorageManager.getFileByName(context, url);
                         long fileSize = file.length();
-                        int progress = (int) (fileSize * 100.0 / mLength);
+                        double progress = fileSize * 100d / mLength;
                         if (progress >= 100) {
+                            Logger.info("yuong","结束时间：" + System.currentTimeMillis());
                             callback.progress(progress);
                             return;
                         }
@@ -117,6 +119,7 @@ public class DownloadManager {
 
     private void processDownload(Context context, String url, long length, DownloadCallback callback) {
         // 100   2  50  0-49  50-99
+        System.out.println("开始时间：" + System.currentTimeMillis());
         long threadDownloadSize = length / MAX_THREAD;
         for (int i = 0; i < MAX_THREAD; i++) {
             DownloadEntity entity = new DownloadEntity();

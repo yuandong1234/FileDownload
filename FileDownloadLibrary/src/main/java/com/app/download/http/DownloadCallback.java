@@ -7,5 +7,5 @@ public interface DownloadCallback {
 
     void fail(int errorCode, String errorMessage);
 
-    void progress(int progress);
+    void progress(double progress);
 }

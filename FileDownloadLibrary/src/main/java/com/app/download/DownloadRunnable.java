@@ -29,6 +29,8 @@ public class DownloadRunnable implements Runnable {
 
     private DownloadEntity mEntity;
 
+    private RecordTask mRecordRunTask;
+
     public DownloadRunnable(Context context, long mStart, long mEnd, String mUrl, DownloadCallback mCallback, DownloadEntity mEntity) {
         this.mContext = context;
         this.mStart = mStart;
@@ -36,6 +38,7 @@ public class DownloadRunnable implements Runnable {
         this.mUrl = mUrl;
         this.mCallback = mCallback;
         this.mEntity = mEntity;
+        this.mRecordRunTask = new RecordTask();
     }
 
 
@@ -45,10 +48,14 @@ public class DownloadRunnable implements Runnable {
         HttpURLConnection connection = HttpManager.getInstance().requestByRange(mUrl, mStart, mEnd);
         if (connection == null || !isSuccessful(connection)) {
             if (mCallback != null) {
-                mCallback.fail(HttpManager.NETWORK_ERROR_CODE, "网络请求失败");
+                mCallback.fail(HttpManager.NETWORK_ERROR_CODE, "network quest fail!");
             }
             return;
         }
+
+        // Start a thread to record download progress
+        new Thread(mRecordRunTask).start();
+
         File file = FileStorageManager.getFileByName(mContext, mUrl);
 
         long finshProgress = mEntity.getProgress_position() == null ? 0 : mEntity.getProgress_position();
@@ -56,27 +63,25 @@ public class DownloadRunnable implements Runnable {
         try {
             RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rwd");
             randomAccessFile.seek(mStart);
-            byte[] buffer = new byte[1024 * 500];
+            byte[] buffer = new byte[1024 * 1024];
             int len;
             InputStream inStream = connection.getInputStream();
             while ((len = inStream.read(buffer, 0, buffer.length)) != -1) {
                 randomAccessFile.write(buffer, 0, len);
                 progress += len;
                 mEntity.setProgress_position(progress + finshProgress);
-                Logger.info("yuong", "thread : " + mEntity.getThread_id() + "  progress  ----->" + progress);
-                //记录
-                DownloadEntityDao.getInstance(mContext).update(mEntity);
+                Logger.info("yuong", "time : "+System.currentTimeMillis()+" thread : " + mEntity.getThread_id() + "  progress  ----->" + progress);
             }
-
             //mEntity.setProgress_position(mEntity.getProgress_position() + finshProgress);
             randomAccessFile.close();
-            mCallback.success(file);
+            mRecordRunTask.setRun(false);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-           // DownloadEntityDao.getInstance(mContext).insert(mEntity);
+            mRecordRunTask.setRun(false);
+            DownloadEntityDao.getInstance(mContext).update(mEntity);
         }
     }
 
@@ -90,5 +95,26 @@ public class DownloadRunnable implements Runnable {
             }
         }
         return (response / 100) == 2;
+    }
+
+    private class RecordTask implements Runnable {
+        private boolean isRunning = true;
+
+        @Override
+        public void run() {
+            while (isRunning) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                DownloadEntityDao.getInstance(mContext).update(mEntity);
+            }
+
+        }
+
+        public void setRun(boolean isRunning) {
+            this.isRunning = isRunning;
+        }
     }
 }
